@@ -12,8 +12,8 @@
   }
   #gameContainer {
     position: relative;
-    width: 600px; /* Размер поля по ширине */
-    height: 400px; /* Размер поля по высоте */
+    width: 600px;
+    height: 400px;
     margin: 20px auto;
     border: 4px solid #fff;
     box-shadow: 0 0 20px rgba(0,0,0,0.5);
@@ -27,14 +27,13 @@
   #overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     background: rgba(0,0,0,0.7);
     flex-direction: column;
     color: #fff;
     font-size: 24px;
-    display: none;
     z-index: 10;
   }
   #overlay button {
@@ -46,16 +45,12 @@
     border-radius: 5px;
     background-color: #28a745;
     color: #fff;
-    transition: background 0.3s;
-  }
-  #overlay button:hover {
-    background-color: #218838;
   }
 </style>
 </head>
 <body>
 <div id="gameContainer">
-  <canvas id="gameCanvas"></canvas>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
   <div id="overlay">
     <div id="gameOverText"></div>
     <button id="restartBtn">Заново</button>
@@ -68,60 +63,50 @@ const overlay = document.getElementById('overlay');
 const gameOverText = document.getElementById('gameOverText');
 const restartBtn = document.getElementById('restartBtn');
 
-let gameActive = false;
-
-function resizeCanvas() {
-  const container = document.getElementById('gameContainer');
-  canvas.width = container.clientWidth;
-  canvas.height = container.clientHeight;
-}
-window.addEventListener('resize', resizeCanvas);
+let gameInterval = null;
 
 function startGame() {
-  resizeCanvas();
-  gameActive = true;
   overlay.style.display = 'none';
 
-  // Создаем текстуры
+  const gridSize = 20;
+  const width = canvas.width;
+  const height = canvas.height;
+
+  // Создаем текстуры в виде простых цветных квадратиков
   const snakeTexture = document.createElement('canvas');
-  snakeTexture.width = 20;
-  snakeTexture.height = 20;
-  const snakeCtx = snakeTexture.getContext('2d');
-  snakeCtx.fillStyle = '#00ff7f';
-  snakeCtx.beginPath();
-  snakeCtx.arc(10, 10, 10, 0, Math.PI * 2);
-  snakeCtx.fill();
+  snakeTexture.width = gridSize;
+  snakeTexture.height = gridSize;
+  const sCtx = snakeTexture.getContext('2d');
+  sCtx.fillStyle = '#00ff7f';
+  sCtx.fillRect(0, 0, gridSize, gridSize);
 
   const appleTexture = document.createElement('canvas');
-  appleTexture.width = 20;
-  appleTexture.height = 20;
-  const appleCtx = appleTexture.getContext('2d');
-  appleCtx.fillStyle = 'red';
-  appleCtx.beginPath();
-  appleCtx.arc(10, 10, 10, 0, Math.PI * 2);
-  appleCtx.fill();
+  appleTexture.width = gridSize;
+  appleTexture.height = gridSize;
+  const aCtx = appleTexture.getContext('2d');
+  aCtx.fillStyle = 'red';
+  aCtx.fillRect(0, 0, gridSize, gridSize);
 
-  const gridSize = 20;
-  const fieldWidth = canvas.width;
-  const fieldHeight = canvas.height;
-
-  // Начальный червячок из 3 частей
+  // Изначальные параметры
   let snake = [
-    {x: Math.floor(fieldWidth/2 / gridSize) * gridSize, y: Math.floor(fieldHeight/2 / gridSize) * gridSize},
-    {x: Math.floor(fieldWidth/2 / gridSize) * gridSize - gridSize, y: Math.floor(fieldHeight/2 / gridSize) * gridSize},
-    {x: Math.floor(fieldWidth/2 / gridSize) * gridSize - 2*gridSize, y: Math.floor(fieldHeight/2 / gridSize)}
+    {x: Math.floor(width/2 / gridSize)*gridSize, y: Math.floor(height/2 / gridSize)*gridSize},
+    {x: Math.floor(width/2 / gridSize)*gridSize - gridSize, y: Math.floor(height/2 / gridSize)*gridSize},
+    {x: Math.floor(width/2 / gridSize)*gridSize - 2*gridSize, y: Math.floor(height/2 / gridSize)}
   ];
-  let snakeLength = snake.length; // 3
+  let snakeLength = 3;
   let direction = {x: gridSize, y: 0};
-
-  // Создаем 3 яблока
   let apples = [];
+  let score = 0;
+
+  // Получаем рекорд из localStorage
+  let record = localStorage.getItem('record') || 0;
+
   function spawnApple() {
     let apple;
     do {
       apple = {
-        x: Math.floor(Math.random() * (fieldWidth / gridSize)) * gridSize,
-        y: Math.floor(Math.random() * (fieldHeight / gridSize)) * gridSize
+        x: Math.floor(Math.random() * (width / gridSize)) * gridSize,
+        y: Math.floor(Math.random() * (height / gridSize)) * gridSize
       };
     } while (
       apples.some(a => a.x === apple.x && a.y === apple.y) ||
@@ -129,34 +114,24 @@ function startGame() {
     );
     return apple;
   }
-  for (let i = 0; i < 3; i++) {
+
+  for (let i=0; i<3; i++) {
     apples.push(spawnApple());
   }
 
-  let score = 0;
-  let gameOver = false;
-
-  // Обработка клавиш
   document.onkeydown = (e) => {
-    if (!gameActive) return;
     if (e.key === 'ArrowUp' && direction.y === 0) {
-      direction.x = 0;
-      direction.y = -gridSize;
+      direction.x = 0; direction.y = -gridSize;
     } else if (e.key === 'ArrowDown' && direction.y === 0) {
-      direction.x = 0;
-      direction.y = gridSize;
+      direction.x = 0; direction.y = gridSize;
     } else if (e.key === 'ArrowLeft' && direction.x === 0) {
-      direction.x = -gridSize;
-      direction.y = 0;
+      direction.x = -gridSize; direction.y = 0;
     } else if (e.key === 'ArrowRight' && direction.x === 0) {
-      direction.x = gridSize;
-      direction.y = 0;
+      direction.x = gridSize; direction.y = 0;
     }
   };
 
   function gameLoop() {
-    if (!gameActive) return;
-
     const newHead = {
       x: snake[0].x + direction.x,
       y: snake[0].y + direction.y
@@ -164,9 +139,9 @@ function startGame() {
 
     // Проверка столкновений
     if (
-      newHead.x < 0 || newHead.x >= fieldWidth ||
-      newHead.y < 0 || newHead.y >= fieldHeight ||
-      snake.some(part => part.x === newHead.x && part.y === newHead.y)
+      newHead.x < 0 || newHead.x >= width ||
+      newHead.y < 0 || newHead.y >= height ||
+      snake.some(s => s.x === newHead.x && s.y === newHead.y)
     ) {
       endGame();
       return;
@@ -174,58 +149,64 @@ function startGame() {
 
     snake.unshift(newHead);
 
-    // Проверка съедания яблока
-    for (let i = 0; i < apples.length; i++) {
+    // Проверка яблок
+    let ateApple = false;
+    for (let i=0; i<apples.length; i++) {
       if (apples[i].x === newHead.x && apples[i].y === newHead.y) {
         score++;
+        if (score > record) {
+          record = score;
+          localStorage.setItem('record', record);
+        }
+        snakeLength++;
         apples[i] = spawnApple();
+        ateApple = true;
         break;
       }
     }
-
     if (snake.length > snakeLength) {
       snake.pop();
     }
 
-    // Рисуем фон
+    // Рисуем
     ctx.fillStyle = '#222';
-    ctx.fillRect(0, 0, fieldWidth, fieldHeight);
+    ctx.fillRect(0, 0, width, height);
 
-    // Яблоки
     for (let apple of apples) {
       ctx.drawImage(appleTexture, apple.x, apple.y);
     }
-
-    // Червяк
     for (let part of snake) {
       ctx.drawImage(snakeTexture, part.x, part.y);
     }
 
-    // Очки
-    ctx.fillStyle = 'white';
-    ctx.font = '20px Arial';
+    ctx.fillStyle='white';
+    ctx.font='20px Arial';
     ctx.fillText('Счет: ' + score, 10, 30);
+    ctx.fillText('Рекорд: ' + record, 10, 60);
   }
 
   function endGame() {
-    gameActive = false;
-    gameOverText.innerHTML = 'Игра окончена!<br>Ваш счет: ' + score;
-    overlay.style.display = 'flex';
+    clearInterval(gameInterval);
+    document.getElementById('gameOverText').innerHTML='Игра окончена!<br>Ваш счет: ' + score;
+    overlay.style.display='flex';
   }
 
-  // Запускаем цикл
-  const intervalId = setInterval(gameLoop, 200);
+  gameInterval = setInterval(gameLoop, 200);
 
-  // Обработчик кнопки "Заново"
-  restartBtn.onclick = () => {
-    clearInterval(intervalId);
+  // Обработка кнопки "Заново"
+  document.getElementById('restartBtn').onclick = () => {
+    clearInterval(gameInterval);
     startGame();
   };
 }
 
-// Старт игры
-startGame();
+document.getElementById('restartBtn').onclick = () => {
+  clearInterval(gameInterval);
+  startGame();
+}
 
+// Запускаем игру впервые
+startGame();
 </script>
 </body>
 </html>
